@@ -1,0 +1,225 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum CycloneCategory {
+  TD
+  TS
+  STS
+  TY
+  STY
+}
+
+enum CycloneStatus {
+  ACTIVE
+  EXITED
+  DISSIPATED
+}
+
+enum LocationType {
+  PROVINCE
+  MUNICIPALITY
+  CITY
+  ISLAND
+  UNKNOWN
+}
+
+enum RainfallLevel {
+  YELLOW
+  ORANGE
+  RED
+}
+
+enum ApiTier {
+  FREE
+  HOBBY
+  PRO
+  BUSINESS
+}
+
+enum WebhookDeliveryStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  EXHAUSTED
+}
+
+enum IngestStatus {
+  RUNNING
+  SUCCESS
+  SKIPPED
+  FAILED
+}
+
+model Cyclone {
+  id                String          @id @default(cuid())
+  /// PAGASA local name, uppercased ("INDAY"). Reused across seasons, so uniqueness is (name, season year).
+  pagasaName        String
+  internationalName String?
+  category          CycloneCategory
+  status            CycloneStatus   @default(ACTIVE)
+  /// Season year the cyclone belongs to (year of first bulletin, PH time).
+  seasonYear        Int
+  firstBulletinAt   DateTime
+  lastBulletinAt    DateTime
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  bulletins Bulletin[]
+
+  @@unique([pagasaName, seasonYear])
+  @@index([status])
+  @@index([seasonYear])
+}
+
+model Bulletin {
+  id                String   @id @default(cuid())
+  cycloneId         String
+  cyclone           Cyclone  @relation(fields: [cycloneId], references: [id], onDelete: Cascade)
+  bulletinNumber    Int
+  /// Final bulletins are numbered like "16F" by PAGASA.
+  isFinal           Boolean  @default(false)
+  issuedAt          DateTime
+  sourceUrl         String
+  /// SHA-256 of the fetched source document — idempotency key for ingestion.
+  sourceHash        String   @unique
+  /// Which parser produced this row; lets us re-parse rawPayload when parsers improve.
+  parserVersion     String
+  /// Raw parsed document + source snapshot for future re-parsing.
+  rawPayload        Json
+  centerLat         Float?
+  centerLng         Float?
+  maxWindsKph       Int?
+  gustinessKph      Int?
+  movementDirection String?
+  movementSpeedKph  Float?
+  pressureHpa       Float?
+  nextBulletinAt    DateTime?
+  createdAt         DateTime @default(now())
+
+  windSignals WindSignal[]
+
+  @@unique([cycloneId, bulletinNumber])
+  @@index([issuedAt])
+}
+
+model WindSignal {
+  id                String       @id @default(cuid())
+  bulletinId        String
+  bulletin          Bulletin     @relation(fields: [bulletinId], references: [id], onDelete: Cascade)
+  signalLevel       Int
+  /// Null when PAGASA's free-text area could not be resolved to a PSGC unit.
+  psgcCode          String?
+  locationName      String
+  locationType      LocationType
+  /// e.g. "northern portion" — null when the whole unit is covered.
+  partialDescriptor String?
+
+  @@index([bulletinId])
+  @@index([psgcCode])
+  @@index([signalLevel])
+}
+
+model RainfallAdvisory {
+  id         String        @id @default(cuid())
+  issuedAt   DateTime
+  region     String
+  level      RainfallLevel
+  /// Array of { psgcCode|null, name, raw } area objects.
+  areas      Json
+  sourceUrl  String
+  sourceHash String        @unique
+  /// Advisories expire; null means still in effect until superseded.
+  expiresAt  DateTime?
+  createdAt  DateTime      @default(now())
+
+  @@index([issuedAt])
+}
+
+model User {
+  id               String   @id @default(cuid())
+  email            String   @unique
+  passwordHash     String
+  stripeCustomerId String?
+  createdAt        DateTime @default(now())
+
+  apiKeys       ApiKey[]
+  subscriptions WebhookSubscription[]
+}
+
+model ApiKey {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// First characters of the key ("bgy_live_ab12cd34") — indexable, shown in dashboards.
+  prefix     String    @unique
+  /// SHA-256 hex of the full key. The plaintext key is shown once at creation, never stored.
+  hashedKey  String
+  tier       ApiTier   @default(FREE)
+  name       String?
+  createdAt  DateTime  @default(now())
+  revokedAt  DateTime?
+  lastUsedAt DateTime?
+
+  @@index([userId])
+}
+
+model WebhookSubscription {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  targetUrl      String
+  /// HMAC secret for X-Bagyo-Signature. Generated server-side, shown once.
+  secret         String
+  eventTypes     String[]
+  /// Only deliver events touching these PSGC codes; empty = all areas.
+  psgcFilter     String[]
+  minSignalLevel Int      @default(1)
+  active         Boolean  @default(true)
+  /// Consecutive delivery failures; auto-disabled at 20.
+  failureCount   Int      @default(0)
+  disabledAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  deliveries WebhookDelivery[]
+
+  @@index([userId])
+  @@index([active])
+}
+
+model WebhookDelivery {
+  id             String                @id @default(cuid())
+  subscriptionId String
+  subscription   WebhookSubscription   @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  eventType      String
+  payload        Json
+  status         WebhookDeliveryStatus @default(PENDING)
+  attempts       Int                   @default(0)
+  lastError      String?
+  nextRetryAt    DateTime?
+  deliveredAt    DateTime?
+  createdAt      DateTime              @default(now())
+
+  @@index([subscriptionId])
+  @@index([status])
+}
+
+model IngestRun {
+  id           String       @id @default(cuid())
+  /// e.g. "pagasa:html", "pagasa:pdf", "pagasa:rainfall"
+  source       String
+  startedAt    DateTime     @default(now())
+  finishedAt   DateTime?
+  status       IngestStatus @default(RUNNING)
+  itemsFound   Int          @default(0)
+  itemsChanged Int          @default(0)
+  error        String?
+
+  @@index([source, startedAt])
+}

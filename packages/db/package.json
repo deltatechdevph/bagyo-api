@@ -1,0 +1,32 @@
+{
+  "name": "@bagyo/db",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "prisma generate && tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "generate": "prisma generate",
+    "migrate:dev": "prisma migrate dev",
+    "migrate:deploy": "prisma migrate deploy",
+    "seed": "node dist/seed.js",
+    "test": "echo 'db package: integration-tested via @bagyo/api' && exit 0"
+  },
+  "dependencies": {
+    "@bagyo/shared": "workspace:*",
+    "@prisma/client": "^6.19.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "prisma": "^6.19.0",
+    "typescript": "^5.9.0"
+  }
+}

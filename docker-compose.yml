@@ -1,0 +1,106 @@
+name: bagyo-api
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: bagyo
+      POSTGRES_PASSWORD: bagyo
+      POSTGRES_DB: bagyo
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U bagyo -d bagyo']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: migrate
+    environment:
+      DATABASE_URL: postgresql://bagyo:bagyo@postgres:5432/bagyo?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: 'no'
+
+  seed:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: migrate
+    command: ['node', 'packages/db/dist/seed.js']
+    environment:
+      DATABASE_URL: postgresql://bagyo:bagyo@postgres:5432/bagyo?schema=public
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: 'no'
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: api
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://bagyo:bagyo@postgres:5432/bagyo?schema=public
+      REDIS_URL: redis://redis:6379
+      API_HOST: 0.0.0.0
+      API_PORT: 3000
+      APP_SECRET: local-dev-secret-please-change-32chars!
+      SCRAPER_USER_AGENT: 'BagyoAPI/1.0 (+https://bagyo-api.example.com)'
+      INGEST_ENABLED: 'true'
+    ports:
+      - '3000:3000'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'node -e "fetch(''http://localhost:3000/v1/health'').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"',
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: worker
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://bagyo:bagyo@postgres:5432/bagyo?schema=public
+      REDIS_URL: redis://redis:6379
+      APP_SECRET: local-dev-secret-please-change-32chars!
+      SCRAPER_USER_AGENT: 'BagyoAPI/1.0 (+https://bagyo-api.example.com)'
+      # Live scraping is off by default for local demo; seeded fixtures provide data.
+      INGEST_ENABLED: 'false'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+volumes:
+  pgdata:

@@ -1,0 +1,7 @@
+dist/
+coverage/
+node_modules/
+fixtures/
+pnpm-lock.yaml
+packages/db/prisma/migrations/
+packages/shared/src/psgc/data/

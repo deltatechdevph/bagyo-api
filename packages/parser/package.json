@@ -1,0 +1,32 @@
+{
+  "name": "@bagyo/parser",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --coverage",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@bagyo/shared": "workspace:*",
+    "cheerio": "^1.2.0",
+    "domhandler": "^5.0.3",
+    "pdfjs-dist": "^5.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.0",
+    "@vitest/coverage-v8": "^4.1.0",
+    "typescript": "^5.9.0",
+    "vitest": "^4.1.0"
+  }
+}

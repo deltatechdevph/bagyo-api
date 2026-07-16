@@ -182,6 +182,10 @@ pnpm test:integration   # API + worker against real Postgres/Redis, including a
                         # signed end-to-end webhook delivery to a local receiver
 ```
 
+> Integration tests truncate the database and consume BullMQ queues — run them against a
+> dedicated Postgres/Redis, not while the demo stack's `worker` container is attached to
+> the same Redis (`docker compose stop worker` first, and re-run the `seed` service after).
+
 Parser tests run against **six real PAGASA TCB PDFs** and **three real HTML pages**
 (including a Signal No. 4 super typhoon and the "No Active Tropical Cyclone" state)
 checked into `fixtures/`.

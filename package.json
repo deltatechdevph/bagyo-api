@@ -5,7 +5,7 @@
   "description": "BagyoAPI — PAGASA tropical cyclone bulletins as a clean REST API",
   "license": "MIT",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "packageManager": "pnpm@10.33.0",
   "scripts": {
@@ -18,8 +18,8 @@
     "test": "pnpm -r --workspace-concurrency=1 test",
     "test:unit": "pnpm --filter @bagyo/parser --filter @bagyo/shared test",
     "test:integration": "pnpm --filter @bagyo/worker --filter @bagyo/api --workspace-concurrency=1 test",
-    "db:migrate": "pnpm --filter @bagyo/db migrate:deploy",
-    "db:seed": "pnpm --filter @bagyo/db seed",
+    "db:migrate": "pnpm --filter @bagyo/db exec sh -c 'set -a; [ -f ../../.env ] && . ../../.env; set +a; prisma migrate deploy'",
+    "db:seed": "node --env-file-if-exists=.env apps/worker/dist/seed.js",
     "dev:api": "pnpm --filter @bagyo/api dev",
     "dev:worker": "pnpm --filter @bagyo/worker dev"
   },

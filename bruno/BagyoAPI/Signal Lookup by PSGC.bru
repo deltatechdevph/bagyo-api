@@ -1,0 +1,13 @@
+meta {
+  name: Signal Lookup by PSGC
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/v1/signals/lookup?psgc=020900000
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+}

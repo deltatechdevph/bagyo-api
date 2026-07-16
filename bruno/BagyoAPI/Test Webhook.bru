@@ -1,0 +1,13 @@
+meta {
+  name: Test Webhook
+  type: http
+  seq: 12
+}
+
+post {
+  url: {{baseUrl}}/v1/webhooks/REPLACE_WITH_ID/test
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+}

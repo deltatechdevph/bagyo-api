@@ -51,3 +51,54 @@ Format: date — decision — why.
 - Each package compiles with `tsc` to `dist/`; apps run compiled JS in Docker and `tsx`
   in dev. Vitest resolves workspace packages to `src/` via aliases so tests never require
   a pre-build. `pnpm deploy` builds pruned production images.
+
+## 2026-07-16 — pdfjs detaches input buffers
+
+- `getDocument({ data })` transfers the underlying ArrayBuffer, silently zeroing the
+  caller's copy. Content hashes computed after parsing were hashes of empty buffers —
+  the idempotency integration test caught it. `extractPdfText` now copies its input.
+
+## 2026-07-16 — Cyclone status comes from the newest bulletin only
+
+- Backfilling an older bulletin (re-parsing history, fixture seeding in file order) must
+  never regress `Cyclone.status/category`. `persistBulletin` applies status/category only
+  when the incoming bulletin is the newest for that cyclone.
+
+## 2026-07-16 — @bagyo/ingest package
+
+- `persistBulletin` + change detection started inside apps/worker, but the seed script
+  and API integration tests both need them; extracted to `packages/ingest`
+  (deps: db + shared only) instead of cross-app imports.
+
+## 2026-07-16 — Seeding lives in apps/worker
+
+- The seed ingests fixture PDFs through the real parser (`@bagyo/parser`) and
+  `@bagyo/ingest`. Putting it in `packages/db` would create a dependency cycle
+  (db → ingest → db), so it ships as `apps/worker/dist/seed.js`.
+
+## 2026-07-16 — Poll cadence via a single 10-minute tick
+
+- One BullMQ job scheduler ticks every 10 minutes; a Redis-backed gate stretches the
+  effective cadence to 30 minutes when no cyclone is ACTIVE. Simpler than swapping
+  repeatable jobs at runtime, and the worst case (one extra HEAD-sized fetch per half
+  hour) stays well within polite-scraping bounds.
+
+## 2026-07-16 — PSGC filter semantics for webhooks
+
+- A non-empty `psgcFilter` restricts a subscription to signal events touching those
+  areas; area-less events (`bulletin.issued`, PAR transitions) are skipped for such
+  subscriptions to avoid spam. `minSignalLevel` gates on max(previous, new) so a
+  Signal 3 → 1 lowering still notifies a "Signal 2+" subscriber.
+
+## 2026-07-16 — Rainfall ingestion is best-effort
+
+- PAGASA regional rainfall advisories are free-form pages with no stable markup. The
+  parser extracts (level, time, areas) conservatively and records a SKIPPED IngestRun
+  when nothing parses — never guesses. Revisit when a stable source appears.
+
+## 2026-07-16 — Docker image strategy
+
+- Multi-stage build compiles once and ships `pnpm prune --prod` output for api/worker;
+  the `migrate` target keeps the full toolchain for `prisma migrate deploy` and seeding.
+  `pnpm deploy`-based slimming was rejected for now: Prisma's generated client lives in
+  the virtual store and does not survive re-installation without re-generating.

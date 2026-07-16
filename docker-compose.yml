@@ -44,7 +44,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: migrate
-    command: ['node', 'packages/db/dist/seed.js']
+    command: ['node', 'apps/worker/dist/seed.js']
     environment:
       DATABASE_URL: postgresql://bagyo:bagyo@postgres:5432/bagyo?schema=public
     depends_on:

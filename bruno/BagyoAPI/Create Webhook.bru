@@ -1,0 +1,23 @@
+meta {
+  name: Create Webhook
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{baseUrl}}/v1/webhooks
+  body: json
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+}
+
+body:json {
+  {
+    "targetUrl": "https://example.com/hooks/bagyo",
+    "eventTypes": ["signal.raised", "signal.lowered"],
+    "psgcFilter": ["031400000"],
+    "minSignalLevel": 2
+  }
+}

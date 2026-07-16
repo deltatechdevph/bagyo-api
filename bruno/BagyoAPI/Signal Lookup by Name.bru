@@ -1,0 +1,13 @@
+meta {
+  name: Signal Lookup by Name
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/v1/signals/lookup?q=Batanes
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+}

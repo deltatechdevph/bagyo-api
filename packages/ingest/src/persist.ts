@@ -89,12 +89,15 @@ export async function persistBulletin(
       });
     }
   } else {
+    // Status/category reflect the cyclone's NEWEST bulletin — backfilling an
+    // older bulletin (e.g. re-parsing history) must never regress them.
+    const isNewest = issuedAt >= cyclone.lastBulletinAt;
     cyclone = await prisma.cyclone.update({
       where: { id: cyclone.id },
       data: {
-        ...(parsed.category === null ? {} : { category: parsed.category }),
+        ...(isNewest && parsed.category !== null ? { category: parsed.category } : {}),
         ...(parsed.internationalName ? { internationalName: parsed.internationalName } : {}),
-        status: cycloneStatus,
+        ...(isNewest ? { status: cycloneStatus } : {}),
         lastBulletinAt: issuedAt > cyclone.lastBulletinAt ? issuedAt : cyclone.lastBulletinAt,
         firstBulletinAt: issuedAt < cyclone.firstBulletinAt ? issuedAt : cyclone.firstBulletinAt,
       },

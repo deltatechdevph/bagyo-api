@@ -1,0 +1,13 @@
+meta {
+  name: Current Signals
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/v1/signals/current
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+}

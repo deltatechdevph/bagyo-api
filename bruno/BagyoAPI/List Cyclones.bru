@@ -1,0 +1,13 @@
+meta {
+  name: List Cyclones
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/v1/cyclones?status=ACTIVE
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+}

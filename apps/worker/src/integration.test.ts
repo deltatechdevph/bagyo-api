@@ -131,6 +131,30 @@ describe('persistBulletin idempotency (real parser + real DB)', () => {
     expect(batanes?.signal).toMatchObject({ previousLevel: null, newLevel: 2 });
   });
 
+  it('backfilling an older bulletin never regresses cyclone status/category', async () => {
+    const pdf16 = new Uint8Array(readFileSync(join(FIX, 'pdf/TCB_16_inday.pdf')));
+    const pdf1 = new Uint8Array(readFileSync(join(FIX, 'pdf/TCB_1_inday.pdf')));
+    const { bulletin: b16 } = await parseBulletinPdf(pdf16); // final, TY
+    const { bulletin: b1 } = await parseBulletinPdf(pdf1); // earlier, STY
+
+    await persistBulletin(prisma, b16, {
+      sourceUrl: 'u16',
+      sourceHash: sha256(Buffer.from(pdf16)),
+      parserVersion: PARSER_VERSION,
+    });
+    const backfilled = await persistBulletin(prisma, b1, {
+      sourceUrl: 'u1',
+      sourceHash: sha256(Buffer.from(pdf1)),
+      parserVersion: PARSER_VERSION,
+    });
+
+    expect(backfilled.cyclone.status).toBe('EXITED'); // not reset to ACTIVE
+    expect(backfilled.cyclone.category).toBe('TY'); // latest bulletin's category wins
+    expect(backfilled.cyclone.firstBulletinAt.toISOString()).toBe(
+      new Date(b1.issuedAt).toISOString(),
+    );
+  });
+
   it('marks the cyclone EXITED on a final outside-PAR bulletin', async () => {
     const pdf16 = new Uint8Array(readFileSync(join(FIX, 'pdf/TCB_16_inday.pdf')));
     const { bulletin: b16 } = await parseBulletinPdf(pdf16);
@@ -141,6 +165,20 @@ describe('persistBulletin idempotency (real parser + real DB)', () => {
     });
     expect(result.cyclone.status).toBe('EXITED');
     expect(result.events.map((e) => e.type)).toContain('cyclone.exited_par');
+  });
+});
+
+describe('cache invalidation', () => {
+  it('unlinks every bagyo:cache:* key and nothing else', async () => {
+    const { invalidateApiCache } = await import('./cache.js');
+    await redis.set('bagyo:cache:signals:current', 'x');
+    await redis.set('bagyo:cache:signals:lookup:q:bulacan', 'y');
+    await redis.set('bagyo:unrelated', 'keep');
+    const removed = await invalidateApiCache(redis);
+    expect(removed).toBe(2);
+    expect(await redis.get('bagyo:cache:signals:current')).toBeNull();
+    expect(await redis.get('bagyo:unrelated')).toBe('keep');
+    await redis.del('bagyo:unrelated');
   });
 });
 

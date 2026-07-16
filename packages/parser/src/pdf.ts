@@ -10,7 +10,8 @@ import { parseBulletinPdfText, type PdfTextParseResult } from './pdf-text.js';
 export async function extractPdfText(data: Uint8Array): Promise<string> {
   // pdfjs transfers (detaches) the buffer it is given — pass a copy so the
   // caller's bytes stay intact for content hashing.
-  const doc = await getDocument({ data: new Uint8Array(data), useSystemFonts: true }).promise;
+  const doc = await getDocument({ data: new Uint8Array(data), useSystemFonts: true, verbosity: 0 })
+    .promise;
   try {
     const pages: string[] = [];
     for (let p = 1; p <= doc.numPages; p++) {

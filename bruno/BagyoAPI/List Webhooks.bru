@@ -1,0 +1,13 @@
+meta {
+  name: List Webhooks
+  type: http
+  seq: 11
+}
+
+get {
+  url: {{baseUrl}}/v1/webhooks
+}
+
+headers {
+  Authorization: Bearer {{apiKey}}
+}

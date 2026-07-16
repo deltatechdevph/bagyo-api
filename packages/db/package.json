@@ -23,11 +23,11 @@
   },
   "dependencies": {
     "@bagyo/shared": "workspace:*",
-    "@prisma/client": "^6.19.0"
+    "@prisma/client": "^6.19.0",
+    "prisma": "^6.19.0"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
-    "prisma": "^6.19.0",
     "typescript": "^5.9.0"
   }
 }

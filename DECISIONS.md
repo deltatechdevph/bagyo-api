@@ -102,3 +102,13 @@ Format: date — decision — why.
   the `migrate` target keeps the full toolchain for `prisma migrate deploy` and seeding.
   `pnpm deploy`-based slimming was rejected for now: Prisma's generated client lives in
   the virtual store and does not survive re-installation without re-generating.
+
+## 2026-07-16 — Docker image strategy, revised after real build
+
+- `pnpm prune --prod` at a workspace root prunes against the ROOT manifest and stripped
+  the sub-packages' runtime deps (api container died with `Cannot find package 'bullmq'`).
+  Replaced with a dedicated `prod` stage: fresh `pnpm install --prod --frozen-lockfile`,
+  `prisma generate` (prisma CLI promoted to @bagyo/db prod deps — needed for
+  `migrate deploy` in production anyway), then COPY the built `dist/` folders. Verified:
+  `docker compose up -d --build` reaches a healthy, seeded API in ~80s. The ~1GB image
+  has headroom to shrink (prisma engines, pdfjs); acceptable for now.

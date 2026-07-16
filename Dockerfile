@@ -13,7 +13,7 @@ COPY packages/shared/package.json packages/shared/
 COPY packages/parser/package.json packages/parser/
 COPY packages/ingest/package.json packages/ingest/
 COPY packages/db/package.json packages/db/
-RUN pnpm install --frozen-lockfile
+RUN CI=true pnpm install --frozen-lockfile
 COPY . .
 RUN pnpm build
 
@@ -21,19 +21,33 @@ RUN pnpm build
 FROM build AS migrate
 CMD ["pnpm", "--filter", "@bagyo/db", "migrate:deploy"]
 
-# ---- pruned: drop devDependencies, keep workspace links + generated prisma client
-FROM build AS pruned
-RUN pnpm prune --prod
+# ---- prod: production node_modules only + built artifacts + generated client
+FROM base AS prod
+ENV NODE_ENV=production
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+COPY apps/api/package.json apps/api/
+COPY apps/worker/package.json apps/worker/
+COPY packages/shared/package.json packages/shared/
+COPY packages/parser/package.json packages/parser/
+COPY packages/ingest/package.json packages/ingest/
+COPY packages/db/package.json packages/db/
+RUN CI=true pnpm install --prod --frozen-lockfile
+COPY packages/db/prisma packages/db/prisma
+RUN pnpm --filter @bagyo/db exec prisma generate
+COPY --from=build /app/packages/shared/dist packages/shared/dist
+COPY --from=build /app/packages/parser/dist packages/parser/dist
+COPY --from=build /app/packages/ingest/dist packages/ingest/dist
+COPY --from=build /app/packages/db/dist packages/db/dist
+COPY --from=build /app/apps/api/dist apps/api/dist
+COPY --from=build /app/apps/worker/dist apps/worker/dist
+# Fixture bulletins power the demo seed (apps/worker/dist/seed.js).
+COPY fixtures fixtures
 
 # ---- api
-FROM base AS api
-ENV NODE_ENV=production
-COPY --from=pruned /app /app
+FROM prod AS api
 EXPOSE 3000
 CMD ["node", "apps/api/dist/index.js"]
 
 # ---- worker
-FROM base AS worker
-ENV NODE_ENV=production
-COPY --from=pruned /app /app
+FROM prod AS worker
 CMD ["node", "apps/worker/dist/index.js"]

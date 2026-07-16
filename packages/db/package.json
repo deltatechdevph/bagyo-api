@@ -18,7 +18,9 @@
     "migrate:dev": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
     "seed": "node dist/seed.js",
-    "test": "echo 'db package: integration-tested via @bagyo/api' && exit 0"
+    "test": "echo 'db package: integration-tested via @bagyo/api' && exit 0",
+    "test:unit": "pnpm --filter @bagyo/parser --filter @bagyo/shared test",
+    "test:integration": "pnpm --filter @bagyo/worker --filter @bagyo/api test"
   },
   "dependencies": {
     "@bagyo/shared": "workspace:*",

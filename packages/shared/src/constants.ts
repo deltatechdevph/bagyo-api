@@ -55,3 +55,14 @@ export const DISCLAIMER =
   'Do not use as the sole source for life-safety decisions — always defer to official PAGASA channels.';
 
 export const DOCS_BASE_URL = 'https://bagyo-api.example.com/docs';
+
+/** Redis cache keys shared by the API (reader) and worker (invalidator). */
+export const CACHE_PREFIX = 'bagyo:cache:';
+export const CACHE_KEYS = {
+  cyclonesActive: `${CACHE_PREFIX}cyclones:active`,
+  signalsCurrent: `${CACHE_PREFIX}signals:current`,
+  bulletinsLatest: `${CACHE_PREFIX}bulletins:latest`,
+  rainfallCurrent: `${CACHE_PREFIX}rainfall:current`,
+  signalsLookup: (key: string) => `${CACHE_PREFIX}signals:lookup:${key}`,
+} as const;
+export const CACHE_TTL_SECONDS = 60;

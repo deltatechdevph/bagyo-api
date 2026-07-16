@@ -34,8 +34,9 @@ export const zDomainEvent = z.object({
 });
 export type DomainEvent = z.infer<typeof zDomainEvent>;
 
+// BullMQ queue names must not contain ':'
 export const QUEUE_NAMES = {
-  ingest: 'bagyo:ingest',
-  events: 'bagyo:events',
-  webhooks: 'bagyo:webhooks',
+  ingest: 'bagyo-ingest',
+  events: 'bagyo-events',
+  webhooks: 'bagyo-webhooks',
 } as const;

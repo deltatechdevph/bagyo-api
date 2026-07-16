@@ -2,7 +2,7 @@
   "name": "bagyo-api-monorepo",
   "version": "1.0.0",
   "private": true,
-  "description": "BagyoAPI — PAGASA tropical cyclone bulletins as a clean REST API",
+  "description": "BagyoAPI \u2014 PAGASA tropical cyclone bulletins as a clean REST API",
   "license": "MIT",
   "engines": {
     "node": ">=20"
@@ -16,8 +16,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "pnpm -r test",
-    "test:unit": "pnpm --filter @bagyo/parser --filter @bagyo/shared --filter @bagyo/worker test",
-    "test:integration": "pnpm --filter @bagyo/api --filter @bagyo/db test",
+    "test:unit": "pnpm --filter @bagyo/parser --filter @bagyo/shared test",
+    "test:integration": "pnpm --filter @bagyo/worker --filter @bagyo/api test",
     "db:migrate": "pnpm --filter @bagyo/db migrate:deploy",
     "db:seed": "pnpm --filter @bagyo/db seed",
     "dev:api": "pnpm --filter @bagyo/api dev",

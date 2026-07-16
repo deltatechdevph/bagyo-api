@@ -8,7 +8,9 @@ import { parseBulletinPdfText, type PdfTextParseResult } from './pdf-text.js';
  * ordered left-to-right, which reconstructs PAGASA's single-column layout well.
  */
 export async function extractPdfText(data: Uint8Array): Promise<string> {
-  const doc = await getDocument({ data, useSystemFonts: true }).promise;
+  // pdfjs transfers (detaches) the buffer it is given — pass a copy so the
+  // caller's bytes stay intact for content hashing.
+  const doc = await getDocument({ data: new Uint8Array(data), useSystemFonts: true }).promise;
   try {
     const pages: string[] = [];
     for (let p = 1; p <= doc.numPages; p++) {

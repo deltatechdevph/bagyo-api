@@ -77,16 +77,22 @@ async function ingestFixture(name = 'TCB_10_inday.pdf') {
   });
 }
 
-describe('auth', () => {
-  it('401 without a key, with the error envelope', async () => {
-    const res = await request.get('/v1/cyclones').expect(401);
+describe('auth & open access', () => {
+  it('data endpoints are open — anonymous GET succeeds with per-IP rate headers', async () => {
+    const res = await request.get('/v1/cyclones').expect(200);
+    expect(res.headers['x-ratelimit-limit']).toBe('10000'); // ANON_DAILY_LIMIT
+    expect((res.body as { source: string }).source).toBe('DOST-PAGASA');
+  });
+
+  it('stateful endpoints still require a key, with the error envelope', async () => {
+    const res = await request.get('/v1/webhooks').expect(401);
     const unauthorizedBody = res.body as { error: { code: string; message: string } };
     expect(unauthorizedBody.error.code).toBe('UNAUTHORIZED');
     expect(unauthorizedBody.error.message).toContain('API key');
     expect((res.body as { error: { docs: string } }).error.docs).toContain('http');
   });
 
-  it('401 for a well-formed but unknown key', async () => {
+  it('401 for a presented-but-unknown key, even on open data routes', async () => {
     await request
       .get('/v1/cyclones')
       .set('authorization', `Bearer bgy_live_${'0'.repeat(40)}`)
@@ -321,13 +327,13 @@ describe('rate limiting', () => {
       .get('/v1/cyclones')
       .set('authorization', `Bearer ${key}`)
       .expect(200);
-    expect(first.headers['x-ratelimit-limit']).toBe('100'); // FREE tier
-    expect(Number(first.headers['x-ratelimit-remaining'])).toBeLessThan(100);
+    expect(first.headers['x-ratelimit-limit']).toBe('100000'); // registered = PRO tier
+    expect(Number(first.headers['x-ratelimit-remaining'])).toBeLessThan(100000);
 
-    // Fill today's bucket to the FREE quota.
+    // Fill today's bucket to the quota.
     const { id: keyId } = await prisma.apiKey.findUniqueOrThrow({ where: { prefix } });
     const day = Math.floor(Date.now() / 86_400_000);
-    await redis.set(`bagyo:rl:${keyId}:${day}`, '100');
+    await redis.set(`bagyo:rl:${keyId}:${day}`, '100000');
 
     const blocked = await request
       .get('/v1/cyclones')
@@ -335,6 +341,15 @@ describe('rate limiting', () => {
       .expect(429);
     expect(blocked.headers['retry-after']).toBeDefined();
     expect((blocked.body as { error: { code: string } }).error.code).toBe('RATE_LIMITED');
+  });
+
+  it('anonymous readers share a per-IP quota', async () => {
+    // trustProxy is on, so the limiter sees X-Forwarded-For — pin a test IP.
+    const ip = '203.0.113.9';
+    const day = Math.floor(Date.now() / 86_400_000);
+    await redis.set(`bagyo:rl:ip:${ip}:${day}`, '10000');
+    const blocked = await request.get('/v1/cyclones').set('x-forwarded-for', ip).expect(429);
+    expect(blocked.headers['retry-after']).toBeDefined();
   });
 });
 

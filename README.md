@@ -93,8 +93,11 @@ Monorepo layout: `packages/shared` (Zod schemas, PSGC dataset + fuzzy resolver, 
 
 ## API overview
 
-All routes are prefixed `/v1`, JSON only, and authenticated with
-`Authorization: Bearer bgy_live_…` (except `/v1/health` and `/docs`).
+All routes are prefixed `/v1` and return JSON. **All data endpoints are free and
+keyless** — cyclones, bulletins, signals, and rainfall are open to everyone with a
+generous per-IP quota. An API key (`Authorization: Bearer bgy_live_…`, free via
+`/v1/account/register`) is only needed for per-user features: webhook subscriptions
+and key management. Keys also raise your rate ceiling.
 
 | Method          | Route                              | Description                                         |
 | --------------- | ---------------------------------- | --------------------------------------------------- |
@@ -125,17 +128,17 @@ Wind signal areas resolve to [PSGC](https://psa.gov.ph/classification/psgc/) cod
 municipality inherits any signal hoisted over its parent province
 (`"coverage": "parent-province"`).
 
-### Rate limits (per key, per day)
+### Rate limits (abuse guards, not a paywall)
 
-| Tier     | Requests/day |
-| -------- | ------------ |
-| FREE     | 100          |
-| HOBBY    | 5,000        |
-| PRO      | 100,000      |
-| BUSINESS | custom       |
+| Access                | Requests/day |
+| --------------------- | ------------ |
+| Anonymous (per IP)    | 10,000       |
+| Registered key (free) | 100,000      |
 
 Every response carries `X-RateLimit-Limit / -Remaining / -Reset`; hitting the quota
 returns `429` with `Retry-After`. Implemented as a sliding-window counter in Redis.
+Self-hosters can tune the ceilings in `packages/shared/src/constants.ts` (the
+FREE/HOBBY/PRO/BUSINESS tiers remain available as knobs).
 
 ### Webhooks
 
@@ -190,27 +193,6 @@ Parser tests run against **six real PAGASA TCB PDFs** and **three real HTML page
 (including a Signal No. 4 super typhoon and the "No Active Tropical Cyclone" state)
 checked into `fixtures/`.
 
-## Listing on RapidAPI
-
-BagyoAPI is marketplace-ready. Set `RAPIDAPI_PROXY_SECRET` (from your provider dashboard)
-and requests arriving through RapidAPI's proxy authenticate via `X-RapidAPI-Proxy-Secret`
-(constant-time compare) instead of a bearer key. Subscribers are auto-provisioned as local
-users keyed by `X-RapidAPI-User`, so webhook subscriptions work for them too. Their plan
-maps onto internal tiers, which stay on as a safety ceiling behind RapidAPI's own quotas —
-configure the marketplace plans to match:
-
-| RapidAPI plan | Internal tier | Ceiling (req/day) |
-| ------------- | ------------- | ----------------- |
-| BASIC         | FREE          | 100               |
-| PRO           | HOBBY         | 5,000             |
-| ULTRA         | PRO           | 100,000           |
-| MEGA          | BUSINESS      | 1,000,000         |
-
-Listing steps: deploy publicly (`INGEST_ENABLED=true` for live data) → RapidAPI provider
-dashboard → _Add New API_ → import the OpenAPI document from `<your-domain>/docs/json` →
-set your base URL and the proxy secret → define the plans above → publish. Direct
-`bgy_live_` keys keep working alongside marketplace traffic.
-
 ## Versioning policy
 
 Breaking changes to response shapes, auth, or semantics ship under a new prefix (`/v2`)
@@ -233,7 +215,15 @@ with `/v1` maintained for ≥6 months. Additive changes (new fields, new endpoin
 - `examples/` — Node / Python / curl snippets for `/v1/signals/lookup`
 - `bruno/BagyoAPI` — [Bruno](https://www.usebruno.com/) API collection
 
+## Contributing
+
+Issues and PRs are welcome — parser fixtures for new PAGASA format variants are
+especially valuable (drop the raw HTML/PDF in `fixtures/` with a failing test).
+Run `pnpm lint && pnpm typecheck && pnpm test` before submitting; CI enforces all
+three plus parser coverage ≥90%.
+
 ## License
 
-MIT. PAGASA bulletin content is Philippine government public information; attribution to
-DOST-PAGASA is included in every response and required of downstream users.
+MIT — see [LICENSE](LICENSE). PAGASA bulletin content is Philippine government public
+information; attribution to DOST-PAGASA is included in every response and required of
+downstream users.

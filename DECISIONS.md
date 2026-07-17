@@ -121,3 +121,12 @@ Format: date — decision — why.
   work; `X-RapidAPI-Subscription` maps BASIC/PRO/ULTRA/MEGA → FREE/HOBBY/PRO/BUSINESS.
   Our rate limiter stays on as a ceiling behind RapidAPI's own plan quotas — defense in
   depth if the proxy misconfigures, and it keeps one enforcement path for both audiences.
+
+## 2026-07-17 — Open source, no paywall
+
+- The project is public (MIT) and the API is free: all read endpoints are keyless with
+  a per-IP quota (10k/day); keys — free via /v1/account/register — exist only for
+  per-user state (webhooks, key management) and a higher ceiling (100k/day). The
+  RapidAPI marketplace integration was removed with the monetization plan (it lives in
+  git history at `724aecb` if anyone needs it). Tier enums stay in the schema as
+  self-hosting knobs.

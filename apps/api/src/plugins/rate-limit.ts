@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { TIER_DAILY_LIMITS } from '@bagyo/shared';
+import { ANON_DAILY_LIMIT, TIER_DAILY_LIMITS } from '@bagyo/shared';
 import type { AppDeps } from '../types.js';
 import { rateLimited } from '../errors.js';
 import { isPublicPath } from './auth.js';
@@ -49,9 +49,13 @@ export async function decide(
 
 export function registerRateLimit(app: FastifyInstance, deps: AppDeps): void {
   app.addHook('onRequest', async (req, reply) => {
-    if (isPublicPath(req.url) || !req.auth) return;
-    const limit = TIER_DAILY_LIMITS[req.auth.tier];
-    const decision = await decide(deps.redis, req.auth.keyId, limit);
+    if (isPublicPath(req.url)) return;
+    // Keyed requests get their tier's quota; anonymous readers share a
+    // generous per-IP quota (abuse guard, not a paywall).
+    const [bucket, limit] = req.auth
+      ? [req.auth.keyId, TIER_DAILY_LIMITS[req.auth.tier]]
+      : [`ip:${req.ip}`, ANON_DAILY_LIMIT];
+    const decision = await decide(deps.redis, bucket, limit);
     void reply.header('x-ratelimit-limit', decision.limit);
     void reply.header('x-ratelimit-remaining', decision.remaining);
     void reply.header('x-ratelimit-reset', decision.resetSeconds);

@@ -43,6 +43,9 @@ export const WEBHOOK_RETRY_DELAYS_MS = [60_000, 300_000, 1_800_000, 7_200_000, 4
 
 export const WEBHOOK_MAX_CONSECUTIVE_FAILURES = 20;
 
+/** Anonymous (keyless) requests share this per-IP daily quota. */
+export const ANON_DAILY_LIMIT = 10_000;
+
 export const API_KEY_PREFIX_LIVE = 'bgy_live_';
 /** Stored, indexable prefix length (includes bgy_live_). */
 export const API_KEY_LOOKUP_PREFIX_LENGTH = 17;

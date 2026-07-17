@@ -6,7 +6,6 @@
 #   DOMAIN=api.example.com
 #   POSTGRES_PASSWORD=<random>
 #   APP_SECRET=<32+ random chars>
-#   RAPIDAPI_PROXY_SECRET=<from RapidAPI dashboard, once listed>   # optional
 name: bagyo-api
 
 services:
@@ -38,7 +37,6 @@ services:
     environment:
       DATABASE_URL: postgresql://bagyo:${POSTGRES_PASSWORD}@postgres:5432/bagyo?schema=public
       APP_SECRET: ${APP_SECRET:?set APP_SECRET in .env (32+ random chars)}
-      RAPIDAPI_PROXY_SECRET: ${RAPIDAPI_PROXY_SECRET:-}
       SCRAPER_USER_AGENT: ${SCRAPER_USER_AGENT:-BagyoAPI/1.0 (+https://${DOMAIN:-example.com})}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
 

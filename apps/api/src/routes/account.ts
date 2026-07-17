@@ -63,14 +63,14 @@ export function registerAccountRoutes(fastify: FastifyInstance, deps: AppDeps): 
         data: {
           email: req.body.email,
           passwordHash,
-          apiKeys: { create: { prefix, hashedKey, tier: 'FREE', name: 'default' } },
+          apiKeys: { create: { prefix, hashedKey, tier: 'PRO', name: 'default' } },
         },
       });
       return reply.status(201).send(
         wrap({
           userId: user.id,
           apiKey: key,
-          tier: 'FREE',
+          tier: 'PRO',
           note: 'Store this key now — it is shown only once and only its hash is kept.',
         }),
       );

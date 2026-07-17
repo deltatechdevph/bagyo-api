@@ -3,7 +3,6 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { API_KEY_LOOKUP_PREFIX_LENGTH, API_KEY_PREFIX_LIVE } from '@bagyo/shared';
 import type { AppDeps } from '../types.js';
 import { unauthorized } from '../errors.js';
-import { authenticateRapidApi } from './rapidapi.js';
 
 /** Routes reachable without an API key. */
 const PUBLIC_PREFIXES = ['/v1/health', '/ready', '/docs', '/metrics', '/v1/account/register'];
@@ -11,6 +10,15 @@ const PUBLIC_PREFIXES = ['/v1/health', '/ready', '/docs', '/metrics', '/v1/accou
 export function isPublicPath(url: string): boolean {
   const path = url.split('?')[0] ?? url;
   return PUBLIC_PREFIXES.some((p) => path === p || path.startsWith(`${p}/`));
+}
+
+/** Read-only data routes are open to everyone — no paywall, no key. */
+const OPEN_DATA_PREFIXES = ['/v1/cyclones', '/v1/bulletins', '/v1/signals', '/v1/rainfall'];
+
+export function isPublicReadRequest(method: string, url: string): boolean {
+  if (method !== 'GET' && method !== 'HEAD') return false;
+  const path = url.split('?')[0] ?? url;
+  return OPEN_DATA_PREFIXES.some((p) => path === p || path.startsWith(`${p}/`));
 }
 
 /**
@@ -22,16 +30,15 @@ export function registerAuth(app: FastifyInstance, deps: AppDeps): void {
   app.addHook('onRequest', async (req: FastifyRequest) => {
     if (isPublicPath(req.url)) return;
 
-    // RapidAPI-proxied traffic authenticates via the shared proxy secret.
-    const rapid = await authenticateRapidApi(req, deps);
-    if (rapid) {
-      req.auth = rapid;
-      return;
-    }
-
     const header = req.headers.authorization;
     if (!header?.startsWith('Bearer ')) {
-      throw unauthorized('Provide an API key: Authorization: Bearer bgy_live_…');
+      // Open data: read endpoints work without a key (per-IP rate limits apply).
+      // Keys are only required for stateful, per-user features.
+      if (isPublicReadRequest(req.method, req.url)) return;
+      throw unauthorized(
+        'This endpoint needs an API key (Authorization: Bearer bgy_live_…). ' +
+          'Data endpoints are free without one.',
+      );
     }
     const key = header.slice('Bearer '.length).trim();
     if (!key.startsWith(API_KEY_PREFIX_LIVE) || key.length < API_KEY_LOOKUP_PREFIX_LENGTH + 8) {

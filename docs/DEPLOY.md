@@ -1,4 +1,4 @@
-# Deploying BagyoAPI on a VPS (Hetzner) + listing on RapidAPI
+# Deploying BagyoAPI on a VPS (Hetzner)
 
 One small VPS runs the whole stack (API, worker, Postgres, Redis, Caddy with
 automatic HTTPS) via docker compose. Tested sizing: Hetzner CX22 (2 vCPU / 4 GB,
@@ -72,31 +72,7 @@ curl -s -X POST https://api.yourdomain.com/v1/account/register \
 The worker polls PAGASA live (10 min while a cyclone is active, 30 min otherwise).
 Outside typhoon events the API legitimately reports no active cyclones.
 
-## 6. List on RapidAPI
-
-1. https://rapidapi.com → provider account → **My APIs** → **Add New API**.
-2. Name _BagyoAPI_, category Weather; choose _Import OpenAPI_ and point it at
-   `https://api.yourdomain.com/docs/json` (or upload the file).
-3. **Gateway/Settings**: set the base URL to `https://api.yourdomain.com` and copy
-   the **Proxy Secret** RapidAPI shows you.
-4. On the server: put it in `.env` as `RAPIDAPI_PROXY_SECRET=...` and re-run the
-   compose command from step 5 (only the api container restarts).
-5. **Plans & Pricing** — match the internal ceilings:
-   | RapidAPI plan | req/day | maps to tier |
-   | ------------- | ------- | ------------ |
-   | BASIC (free)  | 100     | FREE         |
-   | PRO           | 5,000   | HOBBY        |
-   | ULTRA         | 100,000 | PRO          |
-   | MEGA          | custom  | BUSINESS     |
-6. Test from RapidAPI's console (their requests carry `X-RapidAPI-Proxy-Secret`),
-   then **Publish**. Include the disclaimer from the README in the listing
-   description: independent service, not affiliated with PAGASA, not for
-   life-safety decisions.
-
-Marketplace subscribers are auto-provisioned locally, so webhook subscriptions
-work for them; deliveries go directly from your worker to their URLs.
-
-## 7. Updating
+## 6. Updating
 
 ```bash
 cd /opt/bagyo-api && git pull
@@ -109,4 +85,3 @@ Migrations run automatically via the `migrate` service before the API starts.
 
 - Hetzner CX22: ~€3.79/mo + ~€0.60 IPv4 (or CAX11 ARM ~€3.29/mo)
 - Domain: free with DuckDNS, or ~$10/yr for your own
-- RapidAPI provider account: free (they take a commission on paid plans)

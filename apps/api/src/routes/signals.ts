@@ -198,11 +198,18 @@ function pickSignal(
   context: CurrentSignalRow['context'];
 } | null {
   let best: ReturnType<typeof pickSignal> = null;
+  const SPECIFICITY = { direct: 2, 'name-match': 1, 'parent-province': 0 } as const;
   const consider = (
     row: CurrentSignalRow,
     coverage: 'direct' | 'parent-province' | 'name-match',
   ) => {
-    if (!best || row.signalLevel > best.level) {
+    // Higher signal level wins; at equal levels, an explicit listing of the
+    // location beats coverage inherited from its parent province.
+    if (
+      !best ||
+      row.signalLevel > best.level ||
+      (row.signalLevel === best.level && SPECIFICITY[coverage] > SPECIFICITY[best.coverage])
+    ) {
       best = {
         level: row.signalLevel,
         coverage,

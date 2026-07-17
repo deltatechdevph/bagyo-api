@@ -267,9 +267,12 @@ describe('signals endpoints', () => {
       (direct.body as { data: { signal: { level: number; coverage: string } } }).data.signal,
     ).toMatchObject({ level: 2, coverage: 'direct' });
 
-    // Santa Ana, Cagayan is directly listed under Signal 2.
+    // Santa Ana, Cagayan is directly listed under Signal 2 — direct coverage must
+    // win over the same-level parent-province row.
     const mun = await request.get('/v1/signals/lookup?psgc=021523000').set(auth).expect(200);
-    expect((mun.body as { data: { signal: { level: number } } }).data.signal.level).toBe(2);
+    expect(
+      (mun.body as { data: { signal: { level: number; coverage: string } } }).data.signal,
+    ).toMatchObject({ level: 2, coverage: 'direct' });
 
     // Tuao, Cagayan is not listed itself, but Cagayan province rows cover it.
     const inherited = await request.get('/v1/signals/lookup?psgc=021528000').set(auth).expect(200);

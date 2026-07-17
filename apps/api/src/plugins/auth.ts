@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { API_KEY_LOOKUP_PREFIX_LENGTH, API_KEY_PREFIX_LIVE } from '@bagyo/shared';
 import type { AppDeps } from '../types.js';
 import { unauthorized } from '../errors.js';
+import { authenticateRapidApi } from './rapidapi.js';
 
 /** Routes reachable without an API key. */
 const PUBLIC_PREFIXES = ['/v1/health', '/ready', '/docs', '/metrics', '/v1/account/register'];
@@ -20,6 +21,13 @@ export function isPublicPath(url: string): boolean {
 export function registerAuth(app: FastifyInstance, deps: AppDeps): void {
   app.addHook('onRequest', async (req: FastifyRequest) => {
     if (isPublicPath(req.url)) return;
+
+    // RapidAPI-proxied traffic authenticates via the shared proxy secret.
+    const rapid = await authenticateRapidApi(req, deps);
+    if (rapid) {
+      req.auth = rapid;
+      return;
+    }
 
     const header = req.headers.authorization;
     if (!header?.startsWith('Bearer ')) {

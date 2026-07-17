@@ -112,3 +112,12 @@ Format: date — decision — why.
   `migrate deploy` in production anyway), then COPY the built `dist/` folders. Verified:
   `docker compose up -d --build` reaches a healthy, seeded API in ~80s. The ~1GB image
   has headroom to shrink (prisma engines, pdfjs); acceptable for now.
+
+## 2026-07-17 — RapidAPI marketplace auth
+
+- Marketplace traffic authenticates via RapidAPI's `X-RapidAPI-Proxy-Secret` (constant-time
+  compare against `RAPIDAPI_PROXY_SECRET`; unset = feature off). Subscribers are
+  auto-provisioned as local users from `X-RapidAPI-User` so stateful features (webhooks)
+  work; `X-RapidAPI-Subscription` maps BASIC/PRO/ULTRA/MEGA → FREE/HOBBY/PRO/BUSINESS.
+  Our rate limiter stays on as a ceiling behind RapidAPI's own plan quotas — defense in
+  depth if the proxy misconfigures, and it keeps one enforcement path for both audiences.

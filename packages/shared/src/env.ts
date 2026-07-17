@@ -29,6 +29,11 @@ const zEnv = z.object({
     .default('true')
     .transform((v) => v === 'true'),
   APP_SECRET: z.string().min(32, 'APP_SECRET must be at least 32 characters'),
+  /**
+   * Set when listed on RapidAPI: the shared secret their proxy sends as
+   * X-RapidAPI-Proxy-Secret. Empty/unset disables marketplace auth entirely.
+   */
+  RAPIDAPI_PROXY_SECRET: z.string().min(20).optional(),
 });
 
 export type Env = z.infer<typeof zEnv>;

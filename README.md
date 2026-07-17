@@ -190,6 +190,27 @@ Parser tests run against **six real PAGASA TCB PDFs** and **three real HTML page
 (including a Signal No. 4 super typhoon and the "No Active Tropical Cyclone" state)
 checked into `fixtures/`.
 
+## Listing on RapidAPI
+
+BagyoAPI is marketplace-ready. Set `RAPIDAPI_PROXY_SECRET` (from your provider dashboard)
+and requests arriving through RapidAPI's proxy authenticate via `X-RapidAPI-Proxy-Secret`
+(constant-time compare) instead of a bearer key. Subscribers are auto-provisioned as local
+users keyed by `X-RapidAPI-User`, so webhook subscriptions work for them too. Their plan
+maps onto internal tiers, which stay on as a safety ceiling behind RapidAPI's own quotas —
+configure the marketplace plans to match:
+
+| RapidAPI plan | Internal tier | Ceiling (req/day) |
+| ------------- | ------------- | ----------------- |
+| BASIC         | FREE          | 100               |
+| PRO           | HOBBY         | 5,000             |
+| ULTRA         | PRO           | 100,000           |
+| MEGA          | BUSINESS      | 1,000,000         |
+
+Listing steps: deploy publicly (`INGEST_ENABLED=true` for live data) → RapidAPI provider
+dashboard → _Add New API_ → import the OpenAPI document from `<your-domain>/docs/json` →
+set your base URL and the proxy secret → define the plans above → publish. Direct
+`bgy_live_` keys keep working alongside marketplace traffic.
+
 ## Versioning policy
 
 Breaking changes to response shapes, auth, or semantics ship under a new prefix (`/v2`)

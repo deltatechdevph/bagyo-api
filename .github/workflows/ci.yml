@@ -47,10 +47,10 @@ jobs:
           pnpm audit --prod --audit-level critical || {
             echo '::error::critical vulnerability found'; exit 1; }
           pnpm audit --prod || echo '::warning::non-critical vulnerabilities found (non-blocking)'
+      - name: Build (includes prisma generate — required before typed lint)
+        run: pnpm build
       - name: Lint
         run: pnpm lint && pnpm format:check
-      - name: Build (includes prisma generate)
-        run: pnpm build
       - name: Typecheck
         run: pnpm typecheck
       - name: Unit tests (parser coverage gate ≥90%)

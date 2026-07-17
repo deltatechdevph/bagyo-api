@@ -1,0 +1,72 @@
+# Production overrides for a single-VPS deployment behind Caddy (auto-HTTPS).
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# Requires a .env next to this file with at least:
+#   DOMAIN=api.example.com
+#   POSTGRES_PASSWORD=<random>
+#   APP_SECRET=<32+ random chars>
+#   RAPIDAPI_PROXY_SECRET=<from RapidAPI dashboard, once listed>   # optional
+name: bagyo-api
+
+services:
+  postgres:
+    ports: !override []
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    restart: unless-stopped
+
+  redis:
+    ports: !override []
+    restart: unless-stopped
+
+  migrate:
+    environment:
+      DATABASE_URL: postgresql://bagyo:${POSTGRES_PASSWORD}@postgres:5432/bagyo?schema=public
+
+  seed:
+    # The demo seed ships a well-known PRO API key — never run it in production.
+    # (Re-enable deliberately with: --profile demo)
+    profiles: [demo]
+    environment:
+      DATABASE_URL: postgresql://bagyo:${POSTGRES_PASSWORD}@postgres:5432/bagyo?schema=public
+
+  api:
+    # Only Caddy is public; the API stays on the internal network.
+    ports: !override []
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://bagyo:${POSTGRES_PASSWORD}@postgres:5432/bagyo?schema=public
+      APP_SECRET: ${APP_SECRET:?set APP_SECRET in .env (32+ random chars)}
+      RAPIDAPI_PROXY_SECRET: ${RAPIDAPI_PROXY_SECRET:-}
+      SCRAPER_USER_AGENT: ${SCRAPER_USER_AGENT:-BagyoAPI/1.0 (+https://${DOMAIN:-example.com})}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+
+  worker:
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://bagyo:${POSTGRES_PASSWORD}@postgres:5432/bagyo?schema=public
+      APP_SECRET: ${APP_SECRET}
+      SCRAPER_USER_AGENT: ${SCRAPER_USER_AGENT:-BagyoAPI/1.0 (+https://${DOMAIN:-example.com})}
+      # Live PAGASA polling on — this is the product.
+      INGEST_ENABLED: 'true'
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -33,7 +33,10 @@ const zEnv = z.object({
    * Set when listed on RapidAPI: the shared secret their proxy sends as
    * X-RapidAPI-Proxy-Secret. Empty/unset disables marketplace auth entirely.
    */
-  RAPIDAPI_PROXY_SECRET: z.string().min(20).optional(),
+  RAPIDAPI_PROXY_SECRET: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.string().min(20).optional(),
+  ),
 });
 
 export type Env = z.infer<typeof zEnv>;

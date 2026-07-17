@@ -1,0 +1,9 @@
+{$DOMAIN} {
+	encode gzip
+
+	# Internal-only endpoints must never be reachable through the public proxy.
+	@internal path /metrics /ready
+	respond @internal 404
+
+	reverse_proxy api:3000
+}

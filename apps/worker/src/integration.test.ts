@@ -18,7 +18,9 @@ import {
   type DomainEvent,
 } from '@bagyo/shared';
 import { parseBulletinPdf, PARSER_VERSION } from '@bagyo/parser';
-import { persistBulletin, sha256 } from '@bagyo/ingest';
+import { persistBulletin, seasonYearOf, sha256 } from '@bagyo/ingest';
+import { PoliteFetcher } from './fetcher.js';
+import { runBulletinIngest } from './ingest/bulletin-ingest.js';
 import {
   createEventFanoutWorker,
   createWebhookWorker,
@@ -165,6 +167,130 @@ describe('persistBulletin idempotency (real parser + real DB)', () => {
     });
     expect(result.cyclone.status).toBe('EXITED');
     expect(result.events.map((e) => e.type)).toContain('cyclone.exited_par');
+  });
+});
+
+describe('an empty bulletin page closes cyclones left open', () => {
+  const NO_ACTIVE_PAGE =
+    '<html><body><div class="article-content">' +
+    '<h1>No Active Tropical Cyclone within the Philippine Area of Responsibility</h1>' +
+    '</div></body></html>';
+
+  /** Serve the "No Active Tropical Cyclone" page on an ephemeral port. */
+  async function servePage(body: string): Promise<{ url: string; close: () => Promise<void> }> {
+    const server = createServer((_req, res) => {
+      res.writeHead(200, { 'content-type': 'text/html' });
+      res.end(body);
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address() as { port: number };
+    return {
+      url: `http://127.0.0.1:${port}/bulletin`,
+      close: () => new Promise<void>((resolve) => server.close(() => resolve())),
+    };
+  }
+
+  async function ingestEmptyPage(): Promise<{ itemsFound: number; itemsChanged: number }> {
+    const page = await servePage(NO_ACTIVE_PAGE);
+    try {
+      // The page hash is remembered between runs; a test must not be skipped
+      // by a sibling test's leftover.
+      await redis.del('bagyo:ingest:last-hash:bulletin-page');
+      const summary = await runBulletinIngest({
+        prisma,
+        redis,
+        fetcher: new PoliteFetcher({ userAgent: 'test', minHostDelayMs: 0, logger }),
+        eventsQueue,
+        env: { PAGASA_BULLETIN_URL: page.url, PAGASA_PDF_INDEX_URL: page.url },
+        logger,
+      });
+      expect(summary.status).toBe('SUCCESS');
+      return summary;
+    } finally {
+      await page.close();
+    }
+  }
+
+  /** An ACTIVE cyclone whose own promised next bulletin is `overdueHours` late. */
+  async function openCyclone(overdueHours: number, promiseNext = true) {
+    const issuedAt = new Date(Date.now() - (overdueHours + 6) * 3600_000);
+    const nextBulletinAt = new Date(Date.now() - overdueHours * 3600_000);
+    const cyclone = await prisma.cyclone.create({
+      data: {
+        pagasaName: 'TESTER',
+        category: 'TY',
+        status: 'ACTIVE',
+        seasonYear: seasonYearOf(issuedAt.toISOString()),
+        firstBulletinAt: issuedAt,
+        lastBulletinAt: promiseNext ? issuedAt : nextBulletinAt,
+      },
+    });
+    await prisma.bulletin.create({
+      data: {
+        cycloneId: cyclone.id,
+        bulletinNumber: 14,
+        isFinal: false,
+        issuedAt: promiseNext ? issuedAt : nextBulletinAt,
+        nextBulletinAt: promiseNext ? nextBulletinAt : null,
+        sourceUrl: 'u14',
+        sourceHash: sha256(`tester-14-${overdueHours}-${String(promiseNext)}`),
+        parserVersion: PARSER_VERSION,
+        rawPayload: {},
+      },
+    });
+    return cyclone;
+  }
+
+  const statusOf = async (id: string) =>
+    (await prisma.cyclone.findUniqueOrThrow({ where: { id } })).status;
+
+  it('closes an ACTIVE cyclone whose promised bulletin never came', async () => {
+    // The real failure: PAGASA published the FINAL bulletin while the worker
+    // was down, so nothing ever moved the cyclone off ACTIVE and it was served
+    // by /v1/cyclones/active for ever.
+    const cyclone = await openCyclone(24);
+
+    const summary = await ingestEmptyPage();
+
+    expect(summary.itemsFound).toBe(0);
+    expect(summary.itemsChanged).toBe(1); // so the API cache is invalidated
+    expect(await statusOf(cyclone.id)).toBe('EXITED');
+  });
+
+  it('leaves a cyclone alone until its own next bulletin is overdue', async () => {
+    // Not yet past nextBulletinAt + the grace: a false "No Active" match must
+    // not close a storm mid-bulletin-cycle.
+    const cyclone = await openCyclone(1);
+
+    const summary = await ingestEmptyPage();
+
+    expect(summary.itemsChanged).toBe(0);
+    expect(await statusOf(cyclone.id)).toBe('ACTIVE');
+  });
+
+  it('falls back to the last bulletin when none was promised', async () => {
+    const cyclone = await openCyclone(24, false);
+
+    await ingestEmptyPage();
+
+    expect(await statusOf(cyclone.id)).toBe('EXITED');
+  });
+
+  it('is reversible: a later non-final bulletin reopens the cyclone', async () => {
+    const cyclone = await openCyclone(24);
+    await ingestEmptyPage();
+    expect(await statusOf(cyclone.id)).toBe('EXITED');
+
+    const pdf1 = new Uint8Array(readFileSync(join(FIX, 'pdf/TCB_1_inday.pdf')));
+    const { bulletin } = await parseBulletinPdf(pdf1); // not final
+    const reopened = await persistBulletin(
+      prisma,
+      { ...bulletin, pagasaName: 'TESTER', issuedAt: new Date().toISOString() },
+      { sourceUrl: 'u-new', sourceHash: sha256('tester-new'), parserVersion: PARSER_VERSION },
+    );
+
+    expect(reopened.cyclone.id).toBe(cyclone.id);
+    expect(reopened.cyclone.status).toBe('ACTIVE');
   });
 });
 

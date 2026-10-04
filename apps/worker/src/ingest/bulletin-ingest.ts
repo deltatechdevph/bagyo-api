@@ -80,6 +80,12 @@ export async function runBulletinIngest(deps: IngestDeps): Promise<IngestSummary
       logger.warn({ issue }, 'unresolvable area name (stored with psgcCode=null)');
     }
     itemsFound = bulletins.length;
+    if (bulletins.length === 0) {
+      // A clean parse with no bulletins is the "No Active Tropical Cyclone"
+      // page - the only signal that closes a storm whose FINAL bulletin we
+      // never captured. See closeActiveCyclones below.
+      itemsChanged += await closeActiveCyclones(prisma, logger);
+    }
     for (const parsed of bulletins) {
       // Hash per (bulletin content identity), not the whole page, so unrelated
       // page churn does not defeat idempotency.
@@ -139,6 +145,60 @@ export async function runBulletinIngest(deps: IngestDeps): Promise<IngestSummary
     });
   }
   return finish({ status: 'SUCCESS', itemsFound, itemsChanged });
+}
+
+/**
+ * Grace after a cyclone's own promised next bulletin before an empty page is
+ * taken to mean it is over. PAGASA issues a bulletin every 3 to 6 hours.
+ */
+const CLOSE_GRACE_MS = 3 * 3600_000;
+
+/**
+ * Close every ACTIVE cyclone when PAGASA says none is active.
+ *
+ * WHY THIS EXISTS. persistBulletin is the only writer of Cyclone.status, and
+ * it only leaves ACTIVE on a bulletin marked FINAL. PAGASA publishes that
+ * bulletin once and then replaces the whole page with "No Active Tropical
+ * Cyclone". A worker that is down, or whose fetch is failing, during that one
+ * window never sees it - and the cyclone then stays ACTIVE for ever, served by
+ * /v1/cyclones/active with a bulletin that is days old. Observed: QUEENIE,
+ * stuck on bulletin 14 of 2026-09-27 while the page had long gone empty.
+ *
+ * An empty page is a POSITIVE statement that nothing is being tracked, so it
+ * is safe to act on - but parseBulletinHtml matches the phrase against the
+ * whole document, so a false positive is conceivable. Two things bound the
+ * damage. A cyclone is closed only once its OWN promised next bulletin is
+ * CLOSE_GRACE_MS overdue, so nothing is closed mid-cycle. And the close is
+ * reversible by persistBulletin itself: the next non-final bulletin it
+ * captures sets the status back to ACTIVE.
+ *
+ * EXITED, not DISSIPATED: an empty page says the storm is no longer PAGASA's
+ * concern, never that it died.
+ */
+async function closeActiveCyclones(prisma: PrismaClient, logger: Logger): Promise<number> {
+  const active = await prisma.cyclone.findMany({
+    where: { status: 'ACTIVE' },
+    include: { bulletins: { orderBy: { issuedAt: 'desc' }, take: 1 } },
+  });
+
+  const overdue = active.filter((c) => {
+    const due = c.bulletins[0]?.nextBulletinAt ?? c.lastBulletinAt;
+    return Date.now() - due.getTime() > CLOSE_GRACE_MS;
+  });
+
+  if (overdue.length === 0) return 0;
+
+  const { count } = await prisma.cyclone.updateMany({
+    where: { id: { in: overdue.map((c) => c.id) }, status: 'ACTIVE' },
+    data: { status: 'EXITED' },
+  });
+
+  logger.info(
+    { closed: overdue.map((c) => c.pagasaName) },
+    'no active tropical cyclone on the page - closing cyclones left open',
+  );
+
+  return count;
 }
 
 interface PdfFallbackResult {
